@@ -1,4 +1,4 @@
-# mel
+# DEMEL
 
 ## Acknowledgements
-This repository is developed based on https://github.com/pengfei-luo/MIMIC, thanks for their contributions.
+This repository is developed based on MIMIC, thanks for their contributions.
