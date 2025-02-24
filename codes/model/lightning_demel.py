@@ -341,36 +341,3 @@ class LightningForDEMEL(pl.LightningModule):
         ]
         optimizer = torch.optim.AdamW(optimizer_grouped_params, lr=self.args.lr, betas=(0.9, 0.999), eps=1e-4)
         return [optimizer]
-
-
-    def compute_teacher_soft_labels(self, x_logits):
-        return softmax(x_logits / self.temperature, dim=1)
-
-
-    def compute_teacher_softmax_loss(self, x_logits, labels):
-        one_hot_label = torch.nn.functional.one_hot(labels).float()
-        return - torch.sum(one_hot_label * self.logsoftmax(x_logits.detach()), 1, keepdim=True)
-
-    def compute_cl_loss(self, text_entity_logits, text_mask_entity, text_mention_logits, text_mask_mention,
-                        pics_entity_logits, pics_mask_entity, pics_mention_logits, pics_mask_mention):
-        def compute(logits, mask):
-            return - torch.log((F.softmax(logits / self.temperature, dim=1) * mask).sum(1))
-
-        loss_entity__text = compute(text_entity_logits, text_mask_entity).mean()
-        loss_mention_text = compute(text_mention_logits, text_mask_mention).mean()
-        loss_entity__pics = compute(pics_entity_logits, pics_mask_entity).mean()
-        loss_mention_pics = compute(pics_mention_logits, pics_mask_mention).mean()
-        return (loss_entity__text + loss_mention_text + loss_entity__pics + loss_mention_pics) / 4
-
-
-    def compute_weighted_loss(self, x_logits, soft_labels_x, softmax_loss_t_x, labels):
-        one_hot_label = torch.nn.functional.one_hot(labels).float()
-        softmax_loss_s_x = - torch.sum(one_hot_label * self.logsoftmax(x_logits.detach()), 1, keepdim=True)
-        focal_weight_x = softmax_loss_s_x / (softmax_loss_t_x + 1e-7)
-        focal_weight_x = torch.max(focal_weight_x, torch.zeros(1).cuda())
-        focal_weight_x = 1 - torch.exp(- focal_weight_x)
-        softmax_loss_x = - torch.sum(soft_labels_x * self.logsoftmax(x_logits / self.temperature), 1, keepdim=True)
-        softmax_loss_x = focal_weight_x * softmax_loss_x
-        softmax_loss_x = (self.temperature ** 2) * torch.mean(softmax_loss_x)
-        x_loss = self.loss_fct(x_logits / self.temperature, labels)
-        return x_loss + self.alpha * softmax_loss_x
